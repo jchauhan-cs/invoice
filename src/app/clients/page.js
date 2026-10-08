@@ -13,11 +13,11 @@ export default async function ClientsPage() {
         <div className="empty">No clients yet. Add your first client to start invoicing.</div>
       ) : (
         <table>
-          <thead><tr><th>Name</th><th>Email</th><th>Tax ID</th><th /></tr></thead>
+          <thead><tr><th>Name</th><th>Country</th><th>Email</th><th /></tr></thead>
           <tbody>
             {clients.map((c) => (
               <tr key={c.id}>
-                <td>{c.name}</td><td>{c.email || '-'}</td><td>{c.tax_id || '-'}</td>
+                <td>{c.name}</td><td>{c.country || '-'}</td><td>{c.email || '-'}</td>
                 <td className="num"><Link href={`/clients/${c.id}`}>Edit</Link></td>
               </tr>
             ))}

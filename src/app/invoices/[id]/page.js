@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getInvoiceFull } from '@/lib/db';
-import { fmtMoney, fmtNumber } from '@/lib/money';
+import { fmtMoney, fmtNumber, fmtDate, todayISO } from '@/lib/money';
 import { issueInvoice, voidInvoice, deleteDraft, recordPayment } from '@/app/actions';
 import Status from '@/components/Status';
 
@@ -11,7 +11,7 @@ export default async function InvoicePage({ params }) {
   if (!full) notFound();
   const { invoice, items, payments, paid_minor, balance_minor, client } = full;
   const cur = invoice.currency;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayISO();
   const canPay = invoice.status === 'issued';
 
   return (
@@ -39,19 +39,20 @@ export default async function InvoicePage({ params }) {
       </div>
 
       <div className="panel meta">
-        <div><div className="k">Issue date</div>{invoice.issue_date}</div>
-        <div><div className="k">Due date</div>{invoice.due_date}</div>
-        <div><div className="k">Bill to</div><pre className="addr">{[client.name, client.address, client.email].filter(Boolean).join('\n')}</pre></div>
+        <div><div className="k">Invoice date</div>{fmtDate(invoice.issue_date)}</div>
+        <div><div className="k">Payment due</div>{fmtDate(invoice.due_date)}</div>
+        <div><div className="k">Bill to</div><pre className="addr">{[client.name, client.address, client.country, client.email].filter(Boolean).join('\n')}</pre></div>
       </div>
 
       <h2>Line items</h2>
       <table>
-        <thead><tr><th>Description</th><th className="num">Qty</th><th className="num">Unit price</th><th className="num">Amount</th></tr></thead>
+        <thead><tr><th>Description</th><th>HSN/SAC</th><th className="num">Qty</th><th className="num">Unit price</th><th className="num">Amount</th></tr></thead>
         <tbody>
           {items.map((it) => (
             <tr key={it.id}>
-              <td>{it.description}</td>
-              <td className="num">{it.quantity}</td>
+              <td>{it.description}{it.details && <div className="item-sub">{it.details}</div>}</td>
+              <td>{it.hsn_sac}</td>
+              <td className="num">{it.quantity}{it.unit ? ` ${it.unit}` : ''}</td>
               <td className="num">{fmtNumber(it.unit_price_minor)}</td>
               <td className="num">{fmtNumber(it.total_minor)}</td>
             </tr>

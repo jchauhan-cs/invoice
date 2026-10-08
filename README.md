@@ -1,7 +1,9 @@
 # cs-invoices
 
 Invoicing for one company: clients, draft invoices, sequential invoice numbers, PDF download
-and payment tracking. No tax logic. Password-protected.
+and payment tracking. The PDF follows the company's GST export invoice format (GSTIN, HSN/SAC,
+"without payment of IGST" statement, amount in words, bank details, signatory block).
+Export invoices only for now: no CGST/SGST/IGST calculation. Password-protected.
 
 Stack: Next.js 14 (App Router), Postgres (postgres.js), PDFKit. Deploys to Vercel.
 
@@ -22,6 +24,13 @@ Open http://localhost:3000 and sign in with your `ADMIN_PASSWORD`.
 
 Generate a value for `AUTH_SECRET` with `openssl rand -hex 32`, or type any random string of
 16+ characters.
+
+## First-time setup in the app
+
+1. Settings: fill in company name, address, GSTIN, state name and code, bank details, and the
+   default HSN/SAC. Set "Next invoice number" to your last number plus one (for example 198).
+2. Clients: add each buyer with address and country.
+3. Invoices > New invoice: choose the buyer, currency, add lines, save the draft, then issue it.
 
 ## 2. Put the code on GitHub
 
@@ -86,8 +95,12 @@ working while a deploy is in progress.
 
 - Amounts are stored as integers in minor units (cents, paise), never floats.
 - Draft invoices can be edited. Issued invoices cannot; void them instead.
-- The invoice number is assigned at issue time inside a transaction with a row lock, so numbers
-  run in sequence per prefix and year, with no gaps or duplicates.
+- Invoice numbers look like `CS/2026-27/198`: prefix, Indian financial year (April to March),
+  then a running number that restarts each year. The number is assigned at issue time inside a
+  transaction with a row lock, so there are no gaps or duplicates. In Settings you can set the
+  next number so numbering continues from your existing sequence.
+- A line with quantity 1 and no unit prints as a lump sum (only the amount), like the existing
+  invoices. Add a quantity or unit to print Quantity, Rate and per columns.
 - When an invoice is issued, client and company details are copied onto it, so later edits do
   not change old invoices.
 - Login is a signed, HTTP-only cookie (7 days). Every page and the PDF route are protected.

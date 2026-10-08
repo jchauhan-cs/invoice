@@ -1,5 +1,5 @@
 import postgres from 'postgres';
-import { lineTotal } from './money';
+import { lineTotal, todayISO } from './money';
 
 // Return bigint columns as JS numbers and date columns as 'YYYY-MM-DD' strings.
 const types = {
@@ -39,7 +39,7 @@ export async function getClient(id, q = db()) {
 
 export function displayStatus(inv) {
   if (inv.status === 'issued') {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayISO();
     if (inv.due_date < today) return 'overdue';
   }
   return inv.status;
