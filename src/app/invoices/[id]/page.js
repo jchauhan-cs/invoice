@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getInvoiceFull } from '@/lib/db';
+import { getInvoiceFull, previewNextNumber } from '@/lib/db';
 import { fmtMoney, fmtNumber, fmtDate, todayISO } from '@/lib/money';
 import { issueInvoice, voidInvoice, deleteDraft, recordPayment } from '@/app/actions';
 import Status from '@/components/Status';
@@ -13,13 +13,17 @@ export default async function InvoicePage({ params }) {
   const cur = invoice.currency;
   const today = todayISO();
   const canPay = invoice.status === 'issued';
+  const nextNumber = invoice.status === 'draft' ? await previewNextNumber(invoice.issue_date) : null;
 
   return (
     <>
       <div className="row">
         <div>
           <h1>{invoice.number ?? `Draft #${invoice.id}`} <Status value={invoice.display_status} /></h1>
-          <p className="sub" style={{ margin: 0 }}>{client.name}</p>
+          <p className="sub" style={{ margin: 0 }}>
+            {client.name}
+            {nextNumber && <> · Number on issue: <strong>{nextNumber}</strong></>}
+          </p>
         </div>
         <div className="actions">
           <a className="btn" href={`/api/invoices/${id}/pdf`} target="_blank" rel="noreferrer">

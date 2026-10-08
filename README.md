@@ -95,7 +95,7 @@ working while a deploy is in progress.
 
 - Amounts are stored as integers in minor units (cents, paise), never floats.
 - Draft invoices can be edited. Issued invoices cannot; void them instead.
-- Invoice numbers look like `CS/2026-27/198`: prefix, Indian financial year (April to March),
+- Invoice numbers look like `CS/2026-27/198`: prefix (letters, numbers and dashes, for example `CS` or `CS-IN`), Indian financial year (April to March),
   then a running number that restarts each year. The number is assigned at issue time inside a
   transaction with a row lock, so there are no gaps or duplicates. In Settings you can set the
   next number so numbering continues from your existing sequence.

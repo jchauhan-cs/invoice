@@ -1,5 +1,5 @@
 import postgres from 'postgres';
-import { lineTotal, todayISO } from './money';
+import { lineTotal, todayISO, financialYear } from './money';
 
 // Return bigint columns as JS numbers and date columns as 'YYYY-MM-DD' strings.
 const types = {
@@ -79,4 +79,27 @@ export async function getInvoiceFull(id, q = db()) {
     client,
     company,
   };
+}
+
+// Highest running number already issued in a series like "CS/2026-27" (0 if none).
+export async function highestNumberInSeries(series, q = db()) {
+  const [r] = await q`
+    SELECT COALESCE(MAX(split_part(number, '/', 3)::int), 0)::bigint AS m
+    FROM invoices
+    WHERE number LIKE ${`${series}/%`} AND split_part(number, '/', 3) ~ '^[0-9]+$'`;
+  return r.m;
+}
+
+// The number the next issued invoice would get for a given invoice date (preview only;
+// the real number is assigned inside the issue transaction).
+export async function previewNextNumber(issueDate, q = db()) {
+  const settings = await getSettings(q);
+  const series = `${settings.prefix}/${financialYear(issueDate)}`;
+  const [c] = await q`SELECT next_value FROM counters WHERE series = ${series}`;
+  let n = c?.next_value ?? 1;
+  for (let i = 0; i < 1000; i++, n++) {
+    const [taken] = await q`SELECT 1 FROM invoices WHERE number = ${`${series}/${n}`}`;
+    if (!taken) break;
+  }
+  return `${series}/${n}`;
 }

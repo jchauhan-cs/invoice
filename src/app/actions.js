@@ -2,14 +2,33 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { db, getSettings, getClient, getInvoiceFull } from '@/lib/db';
+import { db, getSettings, getClient, getInvoiceFull, highestNumberInSeries } from '@/lib/db';
 import { toMinor, lineTotal, financialYear, todayISO } from '@/lib/money';
 
 const str = (fd, key) => String(fd.get(key) ?? '').trim();
 
 export async function saveSettings(formData) {
   const sql = db();
-  const prefix = (str(formData, 'prefix') || 'CS').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const settingsError = (msg) => redirect(`/settings?error=${encodeURIComponent(msg)}`);
+
+  // Prefix: letters and numbers, with single dashes allowed between parts (for example CS or CS-IN).
+  const prefix = (str(formData, 'prefix') || 'CS').toUpperCase();
+  if (!/^[A-Z0-9]+(-[A-Z0-9]+)*$/.test(prefix)) {
+    settingsError('Invoice number prefix can contain only letters, numbers and dashes, and cannot start or end with a dash.');
+  }
+
+  // Next number: must be above every number already issued in this financial year's series.
+  const series = `${prefix}/${financialYear(todayISO())}`;
+  const nextRaw = str(formData, 'next_number');
+  const next = parseInt(nextRaw, 10);
+  if (nextRaw && !(next >= 1)) settingsError('Next invoice number must be a whole number of 1 or more.');
+  if (next >= 1) {
+    const highest = await highestNumberInSeries(series);
+    if (next <= highest) {
+      settingsError(`Next invoice number must be higher than ${highest}, the highest number already issued in ${series}.`);
+    }
+  }
+
   await sql`
     UPDATE settings SET
       company_name = ${str(formData, 'company_name') || 'Your company name'},
@@ -34,9 +53,7 @@ export async function saveSettings(formData) {
 
   // Optionally set the next invoice number for the current financial year, so numbering
   // can continue from the existing sequence (for example 198 after CS/2026-27/197).
-  const next = parseInt(str(formData, 'next_number'), 10);
   if (next >= 1) {
-    const series = `${prefix}/${financialYear(todayISO())}`;
     const [row] = await sql`SELECT next_value FROM counters WHERE series = ${series}`;
     if ((row?.next_value ?? 1) !== next) {
       await sql`
@@ -145,6 +162,17 @@ export async function saveInvoice(formData) {
 // with no gaps or duplicates.
 export async function issueInvoice(invoiceId) {
   const sql = db();
+  try {
+    await issueInTransaction(sql, invoiceId);
+  } catch (err) {
+    if (err?.code === '23505') throw new Error('That invoice number was just taken. Please try issuing again.');
+    throw err;
+  }
+  revalidatePath('/invoices');
+  redirect(`/invoices/${invoiceId}`);
+}
+
+async function issueInTransaction(sql, invoiceId) {
   await sql.begin(async (tx) => {
     const [locked] = await tx`SELECT status FROM invoices WHERE id = ${invoiceId} FOR UPDATE`;
     if (!locked || locked.status !== 'draft') throw new Error('Only draft invoices can be issued.');
@@ -154,11 +182,20 @@ export async function issueInvoice(invoiceId) {
     const settings = await getSettings(tx);
     const client = await getClient(full.invoice.client_id, tx);
     const series = `${settings.prefix}/${financialYear(full.invoice.issue_date)}`;
-    const [{ n }] = await tx`
-      INSERT INTO counters (series, next_value) VALUES (${series}, 2)
-      ON CONFLICT (series) DO UPDATE SET next_value = counters.next_value + 1
-      RETURNING next_value - 1 AS n`;
-    const number = `${series}/${n}`;
+
+    // Take the next number from the counter. If that number is somehow already used
+    // (for example after the counter was set by hand), skip forward until a free one is found.
+    let number = null;
+    for (let attempt = 0; attempt < 1000 && !number; attempt++) {
+      const [{ n }] = await tx`
+        INSERT INTO counters (series, next_value) VALUES (${series}, 2)
+        ON CONFLICT (series) DO UPDATE SET next_value = counters.next_value + 1
+        RETURNING next_value - 1 AS n`;
+      const candidate = `${series}/${n}`;
+      const [taken] = await tx`SELECT 1 FROM invoices WHERE number = ${candidate}`;
+      if (!taken) number = candidate;
+    }
+    if (!number) throw new Error('Could not find a free invoice number. Check the next invoice number in Settings.');
     const total = full.items.reduce((s, it) => s + it.total_minor, 0);
 
     await tx`
@@ -166,8 +203,6 @@ export async function issueInvoice(invoiceId) {
         client_snapshot = ${tx.json(client)}, company_snapshot = ${tx.json(settings)}
       WHERE id = ${invoiceId}`;
   });
-  revalidatePath('/invoices');
-  redirect(`/invoices/${invoiceId}`);
 }
 
 export async function recordPayment(invoiceId, formData) {

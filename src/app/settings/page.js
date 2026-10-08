@@ -13,6 +13,9 @@ export default async function SettingsPage({ searchParams }) {
       <h1>Settings</h1>
       <p className="sub">These details are printed on every invoice. Issued invoices keep the details they were issued with.</p>
       {searchParams?.saved && <div className="notice">Settings saved.</div>}
+      {searchParams?.error && (
+        <div className="notice" style={{ background: '#fee2e2', color: '#991b1b' }}>{searchParams.error}</div>
+      )}
       <form action={saveSettings} className="stack">
         <div className="panel stack">
           <h2 style={{ margin: 0 }}>Company</h2>
@@ -41,11 +44,15 @@ export default async function SettingsPage({ searchParams }) {
         <div className="panel stack">
           <h2 style={{ margin: 0 }}>Numbering and defaults</h2>
           <div className="grid2">
-            <label>Invoice number prefix<input name="prefix" maxLength={8} required defaultValue={s.prefix} /></label>
+            <label>
+              Invoice number prefix
+              <input name="prefix" maxLength={12} required defaultValue={s.prefix} pattern="[A-Za-z0-9]+(-[A-Za-z0-9]+)*" title="Letters, numbers and dashes only" />
+              <span className="hint">Letters, numbers and dashes, for example CS or CS-IN.</span>
+            </label>
             <label>
               Next invoice number for {series}
               <input type="number" min="1" name="next_number" defaultValue={nextNo} />
-              <span className="hint">Numbers look like {series}/{nextNo}. To continue from your last invoice, enter the last number plus one.</span>
+              <span className="hint">Numbers are assigned automatically in order when you issue an invoice, and look like {series}/{nextNo}. To continue from your last invoice, enter the last number plus one. It must be higher than any number already issued.</span>
             </label>
             <label>Default currency (for example USD, INR)<input name="currency" maxLength={3} required defaultValue={s.currency} /></label>
             <label>Default payment terms (days)<input type="number" min="0" name="payment_terms_days" defaultValue={s.payment_terms_days} /></label>
